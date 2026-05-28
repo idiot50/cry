@@ -44,26 +44,19 @@ class BinanceClient {
             awaitClose { }
             return@callbackFlow
         }
-        val url = "wss://data-stream.binance.vision/ws"
+        val streams = symbols.joinToString("/") { "${it.lowercase()}@ticker" }
+        val url = "wss://data-stream.binance.vision/stream?streams=$streams"
         _status.value = "connecting to binance.vision"
         msgCount = 0
         val request = Request.Builder().url(url).build()
-        val subscribeParams = symbols.joinToString(",") { "\"${it.lowercase()}@ticker\"" }
-        val subscribeMessage =
-            """{"method":"SUBSCRIBE","params":[$subscribeParams],"id":1}"""
 
         val socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                _status.value = "opened, sending subscribe"
-                webSocket.send(subscribeMessage)
+                _status.value = "opened, waiting first message"
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 msgCount++
-                if (text.contains("\"id\":1") && text.contains("\"result\":null")) {
-                    _status.value = "subscribed · waiting ticker"
-                    return
-                }
                 val update = parse(text)
                 if (update == null) {
                     _status.value = "msg#$msgCount unparsed: ${text.take(60)}"
