@@ -3,6 +3,9 @@ package com.cry.app
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -29,27 +32,49 @@ class BinanceClient {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private val _status = MutableStateFlow("idle")
+    val status: StateFlow<String> = _status.asStateFlow()
+
+    private var msgCount = 0L
+
     fun stream(symbols: List<String>): Flow<TickerUpdate> = callbackFlow {
         if (symbols.isEmpty()) {
+            _status.value = "no symbols"
             close()
             awaitClose { }
             return@callbackFlow
         }
         val streams = symbols.joinToString("/") { "${it.lowercase()}@ticker" }
         val url = "wss://fstream.binance.com/stream?streams=$streams"
+        _status.value = "connecting to fstream.binance.com"
+        msgCount = 0
         val request = Request.Builder().url(url).build()
 
         val socket = http.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                _status.value = "connected, waiting for first message"
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
-                val update = parse(text) ?: return
+                msgCount++
+                val update = parse(text)
+                if (update == null) {
+                    _status.value = "parse error msg#$msgCount"
+                    return
+                }
+                _status.value = "live · $msgCount msgs"
                 trySend(update)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                _status.value = "closed ($code): ${reason.ifBlank { "no reason" }}"
                 close()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                val cls = t.javaClass.simpleName
+                val msg = t.message?.take(80) ?: ""
+                _status.value = "error · $cls: $msg"
                 close(t)
             }
         })

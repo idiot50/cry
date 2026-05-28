@@ -65,7 +65,7 @@ fun PriceScreen(
     tickers: Map<String, TickerData>,
     busy: Boolean,
     addError: String?,
-    streamError: String?,
+    connectionStatus: String,
     overlayRunning: Boolean,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -84,29 +84,30 @@ fun PriceScreen(
     }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
-        if (pairs.isEmpty()) {
-            Empty()
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 32.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(pairs, key = { it }) { symbol ->
-                    PriceRow(
-                        ticker = tickers[symbol],
-                        streamError = streamError,
-                        onRemove = { onRemove(symbol) },
-                    )
+        Column(Modifier.fillMaxSize()) {
+            Spacer(Modifier.height(32.dp))
+            StatusBar(
+                status = connectionStatus,
+                overlayRunning = overlayRunning,
+                onToggleOverlay = onToggleOverlay,
+            )
+            if (pairs.isEmpty()) {
+                Empty()
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(pairs, key = { it }) { symbol ->
+                        PriceRow(
+                            ticker = tickers[symbol],
+                            onRemove = { onRemove(symbol) },
+                        )
+                    }
                 }
             }
         }
-
-        OverlayToggle(
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 24.dp),
-            enabled = overlayRunning,
-            onClick = onToggleOverlay,
-        )
 
         AddButton(
             modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
@@ -130,11 +131,43 @@ fun PriceScreen(
     }
 }
 
+@Composable
+private fun StatusBar(
+    status: String,
+    overlayRunning: Boolean,
+    onToggleOverlay: () -> Unit,
+) {
+    val (bg, fg) = when {
+        status.startsWith("error") || status.startsWith("closed") -> Color(0xFF3A0E0E) to Color(0xFFFFB4B4)
+        status.startsWith("live") -> Color(0xFF0E2A1B) to Color(0xFFB4F0CE)
+        status.startsWith("connected") -> Color(0xFF1C1C1C) to Neutral
+        status.startsWith("connecting") -> Color(0xFF1C1C1C) to Neutral
+        else -> Color(0xFF1C1C1C) to Mute
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = status,
+            color = fg,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(12.dp))
+        OverlayToggle(enabled = overlayRunning, onClick = onToggleOverlay)
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PriceRow(
     ticker: TickerData?,
-    streamError: String?,
     onRemove: () -> Unit,
 ) {
     val direction = ticker?.direction ?: 0
@@ -171,44 +204,24 @@ private fun PriceRow(
             )
             .padding(horizontal = 28.dp, vertical = 18.dp),
     ) {
-        when {
-            ticker != null -> {
-                Text(
-                    text = formatPrice(ticker.price),
-                    color = priceColor,
-                    fontSize = 54.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = FontFamily.SansSerif,
-                )
-                Spacer(Modifier.height(2.dp))
-                ChangeLine(ticker.priceChangePercent)
-            }
-            streamError != null -> {
-                Text(
-                    text = "no data",
-                    color = Down,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = FontFamily.SansSerif,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = streamError,
-                    color = Down,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp,
-                )
-            }
-            else -> {
-                Text(
-                    text = "...",
-                    color = Mute,
-                    fontSize = 54.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = FontFamily.SansSerif,
-                )
-            }
+        if (ticker != null) {
+            Text(
+                text = formatPrice(ticker.price),
+                color = priceColor,
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Light,
+                fontFamily = FontFamily.SansSerif,
+            )
+            Spacer(Modifier.height(2.dp))
+            ChangeLine(ticker.priceChangePercent)
+        } else {
+            Text(
+                text = "—",
+                color = Neutral,
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Light,
+                fontFamily = FontFamily.SansSerif,
+            )
         }
     }
 }

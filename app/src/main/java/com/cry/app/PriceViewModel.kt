@@ -33,6 +33,8 @@ class PriceViewModel(app: Application) : AndroidViewModel(app) {
     private val _streamError = MutableStateFlow<String?>(null)
     val streamError: StateFlow<String?> = _streamError.asStateFlow()
 
+    val connectionStatus: StateFlow<String> = client.status
+
     private var streamJob: Job? = null
 
     init {
