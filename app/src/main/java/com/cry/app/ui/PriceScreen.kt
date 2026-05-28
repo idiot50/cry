@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -47,7 +50,6 @@ import androidx.compose.ui.unit.sp
 import com.cry.app.data.TickerData
 import kotlinx.coroutines.delay
 import java.text.DecimalFormat
-import kotlin.math.abs
 
 private val Bg = Color(0xFF050505)
 private val Faint = Color(0xFF1E1E1E)
@@ -63,9 +65,11 @@ fun PriceScreen(
     tickers: Map<String, TickerData>,
     busy: Boolean,
     addError: String?,
+    overlayRunning: Boolean,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
     onClearError: () -> Unit,
+    onToggleOverlay: () -> Unit,
 ) {
     var showAdd by rememberSaveable { mutableStateOf(false) }
 
@@ -96,6 +100,12 @@ fun PriceScreen(
                 }
             }
         }
+
+        OverlayToggle(
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 24.dp),
+            enabled = overlayRunning,
+            onClick = onToggleOverlay,
+        )
 
         AddButton(
             modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
@@ -201,6 +211,37 @@ private fun ChangeLine(change: Double?) {
         fontFamily = FontFamily.Monospace,
         letterSpacing = 1.5.sp,
     )
+}
+
+@Composable
+private fun OverlayToggle(
+    modifier: Modifier = Modifier,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier = modifier.clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+        ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(6.dp)
+                .background(if (enabled) Up else Faint, shape = CircleShape),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "overlay",
+            color = if (enabled) Neutral else Mute,
+            fontSize = 11.sp,
+            letterSpacing = 4.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
 }
 
 @Composable
@@ -344,27 +385,3 @@ private fun AddPairDialog(
     )
 }
 
-private val KNOWN_QUOTES = listOf("USDT", "USDC", "BUSD", "BTC", "ETH", "FDUSD", "TUSD")
-
-private fun formatSymbol(s: String): String {
-    val quote = KNOWN_QUOTES.firstOrNull { s.endsWith(it) && s.length > it.length }
-    return if (quote != null) {
-        val base = s.removeSuffix(quote)
-        "$base · $quote"
-    } else {
-        s
-    }
-}
-
-private val fmtBig = DecimalFormat("#,##0.00")
-private val fmtSmall = DecimalFormat("#,##0.0000")
-private val fmtTiny = DecimalFormat("#,##0.00000000")
-
-private fun formatPrice(v: Double): String {
-    val a = abs(v)
-    return when {
-        a >= 1.0 -> fmtBig.format(v)
-        a >= 0.001 -> fmtSmall.format(v)
-        else -> fmtTiny.format(v)
-    }
-}
