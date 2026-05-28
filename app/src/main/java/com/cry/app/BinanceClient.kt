@@ -44,8 +44,8 @@ class BinanceClient {
             awaitClose { }
             return@callbackFlow
         }
-        val url = "wss://fstream.binance.com/ws"
-        _status.value = "connecting to fstream.binance.com"
+        val url = "wss://data-stream.binance.vision/ws"
+        _status.value = "connecting to binance.vision"
         msgCount = 0
         val request = Request.Builder().url(url).build()
         val subscribeParams = symbols.joinToString(",") { "\"${it.lowercase()}@ticker\"" }
@@ -94,7 +94,7 @@ class BinanceClient {
     suspend fun isValidSymbol(symbol: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val req = Request.Builder()
-                .url("https://fapi.binance.com/fapi/v1/ticker/price?symbol=$symbol")
+                .url("https://data-api.binance.vision/api/v3/ticker/price?symbol=$symbol")
                 .build()
             http.newCall(req).execute().use { it.isSuccessful }
         } catch (_: Exception) {
