@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                     val tickers by vm.tickers.collectAsStateWithLifecycle()
                     val busy by vm.busy.collectAsStateWithLifecycle()
                     val addError by vm.addError.collectAsStateWithLifecycle()
+                    val streamError by vm.streamError.collectAsStateWithLifecycle()
                     val overlayRunning by OverlayService.isRunning.collectAsStateWithLifecycle()
 
                     PriceScreen(
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
                         tickers = tickers,
                         busy = busy,
                         addError = addError,
+                        streamError = streamError,
                         overlayRunning = overlayRunning,
                         onAdd = vm::addPair,
                         onRemove = vm::removePair,

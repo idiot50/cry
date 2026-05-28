@@ -65,6 +65,7 @@ fun PriceScreen(
     tickers: Map<String, TickerData>,
     busy: Boolean,
     addError: String?,
+    streamError: String?,
     overlayRunning: Boolean,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
@@ -93,8 +94,8 @@ fun PriceScreen(
             ) {
                 items(pairs, key = { it }) { symbol ->
                     PriceRow(
-                        symbol = symbol,
                         ticker = tickers[symbol],
+                        streamError = streamError,
                         onRemove = { onRemove(symbol) },
                     )
                 }
@@ -132,8 +133,8 @@ fun PriceScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PriceRow(
-    symbol: String,
     ticker: TickerData?,
+    streamError: String?,
     onRemove: () -> Unit,
 ) {
     val direction = ticker?.direction ?: 0
@@ -170,24 +171,45 @@ private fun PriceRow(
             )
             .padding(horizontal = 28.dp, vertical = 18.dp),
     ) {
-        Text(
-            text = formatSymbol(symbol),
-            color = Mute,
-            fontSize = 12.sp,
-            letterSpacing = 4.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Normal,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = ticker?.price?.let(::formatPrice) ?: "—",
-            color = priceColor,
-            fontSize = 54.sp,
-            fontWeight = FontWeight.Light,
-            fontFamily = FontFamily.SansSerif,
-        )
-        Spacer(Modifier.height(2.dp))
-        ChangeLine(ticker?.priceChangePercent)
+        when {
+            ticker != null -> {
+                Text(
+                    text = formatPrice(ticker.price),
+                    color = priceColor,
+                    fontSize = 54.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = FontFamily.SansSerif,
+                )
+                Spacer(Modifier.height(2.dp))
+                ChangeLine(ticker.priceChangePercent)
+            }
+            streamError != null -> {
+                Text(
+                    text = "no data",
+                    color = Down,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = FontFamily.SansSerif,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = streamError,
+                    color = Down,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp,
+                )
+            }
+            else -> {
+                Text(
+                    text = "...",
+                    color = Mute,
+                    fontSize = 54.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = FontFamily.SansSerif,
+                )
+            }
+        }
     }
 }
 

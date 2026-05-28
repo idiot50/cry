@@ -30,6 +30,9 @@ class PriceViewModel(app: Application) : AndroidViewModel(app) {
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    private val _streamError = MutableStateFlow<String?>(null)
+    val streamError: StateFlow<String?> = _streamError.asStateFlow()
+
     private var streamJob: Job? = null
 
     init {
@@ -39,11 +42,13 @@ class PriceViewModel(app: Application) : AndroidViewModel(app) {
     private fun restartStream() {
         streamJob?.cancel()
         val symbols = _pairs.value
+        _streamError.value = null
         if (symbols.isEmpty()) return
         streamJob = viewModelScope.launch {
             while (isActive) {
                 try {
                     client.stream(symbols).collect { update ->
+                        if (_streamError.value != null) _streamError.value = null
                         _tickers.update { current ->
                             val prev = current[update.symbol]
                             val direction = when {
@@ -60,8 +65,9 @@ class PriceViewModel(app: Application) : AndroidViewModel(app) {
                             ))
                         }
                     }
-                } catch (_: Exception) {
-                    // fall through to retry
+                    _streamError.value = "disconnected"
+                } catch (e: Exception) {
+                    _streamError.value = e.message?.take(80) ?: "connection failed"
                 }
                 if (!isActive) break
                 delay(2000)

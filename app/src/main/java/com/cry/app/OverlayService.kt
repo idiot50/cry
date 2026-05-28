@@ -21,7 +21,6 @@ import androidx.core.app.NotificationCompat
 import com.cry.app.data.PairsRepository
 import com.cry.app.data.TickerData
 import com.cry.app.ui.formatPrice
-import com.cry.app.ui.formatSymbol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,6 +44,7 @@ class OverlayService : Service() {
     private var overlayView: View? = null
     private val tickers = mutableMapOf<String, TickerData>()
     private var currentSymbols: List<String> = emptyList()
+    private var streamError: String? = null
 
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == PREFS_KEY) {
@@ -164,6 +164,7 @@ class OverlayService : Service() {
         currentSymbols = symbols
         streamJob?.cancel()
         tickers.keys.toList().forEach { if (it !in symbols) tickers.remove(it) }
+        streamError = null
         updateOverlayRows()
         if (symbols.isEmpty()) return
 
@@ -171,6 +172,7 @@ class OverlayService : Service() {
             while (isActive) {
                 try {
                     client.stream(symbols).collect { update ->
+                        if (streamError != null) streamError = null
                         val prev = tickers[update.symbol]
                         val direction = when {
                             prev == null -> 0
@@ -186,8 +188,11 @@ class OverlayService : Service() {
                         )
                         updateOverlayRows()
                     }
-                } catch (_: Exception) {
-                    // retry
+                    streamError = "disconnected"
+                    updateOverlayRows()
+                } catch (e: Exception) {
+                    streamError = e.message?.take(40) ?: "connection failed"
+                    updateOverlayRows()
                 }
                 if (!isActive) break
                 delay(2000)
@@ -198,7 +203,6 @@ class OverlayService : Service() {
     private fun updateOverlayRows() {
         val view = overlayView ?: return
         val rowIds = intArrayOf(R.id.row_1, R.id.row_2, R.id.row_3)
-        val symbolIds = intArrayOf(R.id.symbol_1, R.id.symbol_2, R.id.symbol_3)
         val priceIds = intArrayOf(R.id.price_1, R.id.price_2, R.id.price_3)
         val changeIds = intArrayOf(R.id.change_1, R.id.change_2, R.id.change_3)
 
@@ -210,25 +214,36 @@ class OverlayService : Service() {
                 continue
             }
             row.visibility = View.VISIBLE
-            view.findViewById<TextView>(symbolIds[i]).text = formatSymbol(sym)
-            val ticker = tickers[sym]
-            view.findViewById<TextView>(priceIds[i]).text =
-                ticker?.let { formatPrice(it.price) } ?: "—"
 
+            val ticker = tickers[sym]
+            val priceView = view.findViewById<TextView>(priceIds[i])
             val changeView = view.findViewById<TextView>(changeIds[i])
-            if (ticker != null) {
-                val pct = ticker.priceChangePercent
-                changeView.text =
-                    if (pct >= 0) "+%.2f%%".format(pct) else "%.2f%%".format(pct)
-                changeView.setTextColor(
-                    when {
-                        pct > 0 -> COLOR_UP
-                        pct < 0 -> COLOR_DOWN
-                        else -> COLOR_MUTE
-                    },
-                )
-            } else {
-                changeView.text = ""
+
+            when {
+                ticker != null -> {
+                    priceView.text = formatPrice(ticker.price)
+                    priceView.setTextColor(COLOR_NEUTRAL)
+                    val pct = ticker.priceChangePercent
+                    changeView.text =
+                        if (pct >= 0) "+%.2f%%".format(pct) else "%.2f%%".format(pct)
+                    changeView.setTextColor(
+                        when {
+                            pct > 0 -> COLOR_UP
+                            pct < 0 -> COLOR_DOWN
+                            else -> COLOR_MUTE
+                        },
+                    )
+                }
+                streamError != null -> {
+                    priceView.text = "no data"
+                    priceView.setTextColor(COLOR_DOWN)
+                    changeView.text = ""
+                }
+                else -> {
+                    priceView.text = "..."
+                    priceView.setTextColor(COLOR_MUTE)
+                    changeView.text = ""
+                }
             }
         }
     }
@@ -286,6 +301,7 @@ class OverlayService : Service() {
         private const val COLOR_UP = 0xFF6BE3A8.toInt()
         private const val COLOR_DOWN = 0xFFE36B6B.toInt()
         private const val COLOR_MUTE = 0xFF6E6E6E.toInt()
+        private const val COLOR_NEUTRAL = 0xFFEDEDED.toInt()
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
