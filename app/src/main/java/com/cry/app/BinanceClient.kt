@@ -44,22 +44,29 @@ class BinanceClient {
             awaitClose { }
             return@callbackFlow
         }
-        val streams = symbols.joinToString("/") { "${it.lowercase()}@ticker" }
-        val url = "wss://fstream.binance.com/stream?streams=$streams"
+        val url = "wss://fstream.binance.com/ws"
         _status.value = "connecting to fstream.binance.com"
         msgCount = 0
         val request = Request.Builder().url(url).build()
+        val subscribeParams = symbols.joinToString(",") { "\"${it.lowercase()}@ticker\"" }
+        val subscribeMessage =
+            """{"method":"SUBSCRIBE","params":[$subscribeParams],"id":1}"""
 
         val socket = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                _status.value = "connected, waiting for first message"
+                _status.value = "opened, sending subscribe"
+                webSocket.send(subscribeMessage)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 msgCount++
+                if (text.contains("\"id\":1") && text.contains("\"result\":null")) {
+                    _status.value = "subscribed · waiting ticker"
+                    return
+                }
                 val update = parse(text)
                 if (update == null) {
-                    _status.value = "parse error msg#$msgCount"
+                    _status.value = "msg#$msgCount unparsed: ${text.take(60)}"
                     return
                 }
                 _status.value = "live · $msgCount msgs"
@@ -98,7 +105,7 @@ class BinanceClient {
     private fun parse(text: String): TickerUpdate? {
         return try {
             val root = json.parseToJsonElement(text).jsonObject
-            val data = root["data"]?.jsonObject ?: return null
+            val data = root["data"]?.jsonObject ?: root
             val s = data["s"]?.jsonPrimitive?.content ?: return null
             val p = data["c"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: return null
             val pct = data["P"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
